@@ -1085,11 +1085,28 @@
 			wrap.appendChild(box);
 		}
 
-		function nrsByOrder(order) {
-			if (order === 1) return randint(7, 8);
-			if (order === 2) return randint(6, 7);
-			if (order === 3) return randint(5, 6);
-			return randint(4, 5);
+		function nrsByOrder(order, item = {}) {
+			let min = 4;
+			let max = 5;
+
+			if (order === 1) {
+				min = 7;
+				max = 8;
+			} else if (order === 2) {
+				min = 6;
+				max = 7;
+			} else if (order === 3) {
+				min = 5;
+				max = 6;
+			}
+
+			if (["neck", "lowback"].includes(item.id)) {
+				const severityMax = item.severity === "moderate" ? 8 : 7;
+				max = Math.min(max, severityMax);
+				min = Math.min(min, max);
+			}
+
+			return randint(min, max);
 		}
 
 		function normalizeRomForChuna(rom) {
@@ -1229,7 +1246,7 @@
 		}
 
 		function createPartBlock(item, order) {
-			const nrs = nrsByOrder(order);
+			const nrs = nrsByOrder(order, item);
 			const dirKo = directionKo(item.direction);
 			let rom = "";
 			let lines = [];
