@@ -1,0 +1,1762 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><script>
+(function(){
+  var __k="ce58f98c-f955-4d40-828f-282f5ad5e526";
+  var __a=null;
+  var __preload=null;
+  if(!__k)return;
+  var _f=window.fetch;
+  // S3 URL → file_key 추출 후 __a 매핑 lookup → assets/ 로컬 경로 치환
+  // 응답에 새 signed URL이 와도 같은 file_key면 같은 assets/ → 영구 작동
+  function patchUrls(data){
+    if(!__a)return data;
+    try{
+      var s=JSON.stringify(data);
+      // 응답 안의 모든 S3 URL을 정규식으로 찾고, file_key 추출 → 매핑 lookup
+      s=s.replace(/https:\/\/prod-files-secure\.s3\.amazonaws\.com\/[^"\s<>]+/g,function(url){
+        var m=url.match(/\.amazonaws\.com\/([^?\\]+)/);
+        if(!m)return url;
+        var key=m[1].replace(/\\u002F/g,"/");
+        return __a[key]||url;
+      });
+      return JSON.parse(s);
+    }catch(e){return data;}
+  }
+  function callMisiso(method,path,body){
+    return _f("https://misiso.com/api/notion/deploy-proxy",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({deployKey:__k,path:path,method:method,body:body})
+    }).then(function(r){
+      var status=r.status;
+      return r.json().then(function(data){return {status:status,data:patchUrls(data)};});
+    });
+  }
+  // preload pattern — 페이지 로드와 병렬로 정적 fetch 호출 미리 시작
+  var __preloadCache={};
+  if(__preload){
+    for(var i=0;i<__preload.length;i++){
+      (function(c){
+        var key=c.method+":"+c.path+":"+(c.body?JSON.stringify(c.body):"");
+        __preloadCache[key]=callMisiso(c.method,c.path,c.body);
+      })(__preload[i]);
+    }
+  }
+  window.fetch=function(url,opts){
+    var u=typeof url==="string"?url:String(url);
+    if(!u.startsWith("/api/notion/"))return _f.apply(this,arguments);
+    var path=u.slice("/api/notion".length);
+    var method=(opts&&opts.method)||"GET";
+    var body;
+    try{body=opts&&opts.body?JSON.parse(opts.body):undefined;}catch(e){body=opts&&opts.body;}
+    var ck=method+":"+path+":"+(body?JSON.stringify(body):"");
+    var promise=__preloadCache[ck];
+    if(promise){delete __preloadCache[ck];}
+    else{promise=callMisiso(method,path,body);}
+    return promise.then(function(res){
+      return new Response(JSON.stringify(res.data),{
+        status:res.status,
+        headers:{"Content-Type":"application/json"}
+      });
+    });
+  };
+})();
+</script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://misiso.com" crossorigin/>
+<meta property="og:type" content="website"/>
+<meta property="og:title" content="자동차보험 환자 차트 자동 생성기"/>
+<meta property="og:description" content="선택한 내용에 맞춰 O/S, P/I, C/C, P/H 와 추나 차트까지 자동으로 생성합니다."/>
+<title>자동차보험 환자 차트 자동 생성기</title>
+<meta name="description" content="선택한 내용에 맞춰 O/S, P/I, C/C, P/H 와 추나 차트까지 자동으로 생성합니다."/>
+<meta property="og:image" content="https://junesight.github.io/ta-chart-maker/og-image-00csv060.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:image" content="https://junesight.github.io/ta-chart-maker/og-image-00csv060.png"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Crect%20width%3D'32'%20height%3D'32'%20rx%3D'6'%20fill%3D'%236366f1'%2F%3E%3Ctext%20x%3D'16'%20y%3D'22'%20text-anchor%3D'middle'%20font-size%3D'18'%20fill%3D'white'%20font-family%3D'sans-serif'%3E%EC%9E%90%3C%2Ftext%3E%3C%2Fsvg%3E"/>
+<script src="https://cdn.tailwindcss.com"></script>
+</head><body><!doctype html>
+<html lang="ko">
+<head>
+	
+	
+	
+	<style>
+		:root {
+			--bg: #f6f7fb;
+			--card: #ffffff;
+			--text: #1f2937;
+			--muted: #6b7280;
+			--line: #e5e7eb;
+			--primary: #2563eb;
+			--primary-soft: #dbeafe;
+			--danger: #dc2626;
+			--green: #16a34a;
+			--shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--text);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+			line-height: 1.5;
+		}
+
+		.app {
+			max-width: 1480px;
+			margin: 0 auto;
+			padding: 28px 18px 56px;
+		}
+
+		header {
+			margin-bottom: 20px;
+		}
+
+		h1 {
+			margin: 0 0 8px;
+			font-size: 28px;
+			letter-spacing: -0.03em;
+		}
+
+		.subtitle {
+			margin: 0;
+			color: var(--muted);
+			font-size: 14px;
+		}
+
+		.grid {
+			display: grid;
+			grid-template-columns: 340px 420px minmax(360px, 1fr);
+			gap: 18px;
+			align-items: start;
+		}
+
+		.card {
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-radius: 18px;
+			box-shadow: var(--shadow);
+			padding: 18px;
+		}
+
+		.card h2 {
+			margin: 0 0 14px;
+			font-size: 18px;
+			letter-spacing: -0.02em;
+		}
+
+		.parts {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
+		}
+
+		button {
+			border: 0;
+			border-radius: 12px;
+			padding: 11px 12px;
+			font-weight: 700;
+			cursor: pointer;
+			transition: 0.15s;
+			font-family: inherit;
+		}
+
+		.part-btn {
+			background: #f3f4f6;
+			color: var(--text);
+			border: 1px solid #e5e7eb;
+		}
+
+		.part-btn:hover {
+			background: #e5e7eb;
+		}
+
+		.part-btn.active {
+			background: var(--primary-soft);
+			color: var(--primary);
+			border-color: #93c5fd;
+		}
+
+		.selected-list {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			margin-top: 16px;
+		}
+
+		.selected-item {
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 12px;
+			background: #fbfdff;
+		}
+
+		.selected-top {
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			align-items: center;
+			margin-bottom: 10px;
+		}
+
+		.selected-title {
+			font-weight: 800;
+		}
+
+		.order-badge {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 28px;
+			height: 28px;
+			border-radius: 999px;
+			background: #111827;
+			color: white;
+			font-size: 13px;
+			margin-right: 6px;
+		}
+
+		.remove-btn {
+			padding: 6px 8px;
+			font-size: 12px;
+			background: #fee2e2;
+			color: var(--danger);
+		}
+
+		.direction-row {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+
+		.symptom-title {
+			margin: 10px 0 6px;
+			font-size: 12px;
+			font-weight: 800;
+			color: var(--muted);
+		}
+
+		.symptom-row {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+
+		.past-history-grid {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 8px;
+		}
+
+		.past-history-grid .dir-btn {
+			width: 100%;
+			min-height: 38px;
+		}
+
+		.dir-btn {
+			min-width: 48px;
+			padding: 8px 10px;
+			font-size: 13px;
+			background: #f3f4f6;
+			border: 1px solid #e5e7eb;
+		}
+
+		.severity-start {
+			margin-left: 22px;
+		}
+
+		.severity-start-lowback {
+			margin-left: 78px;
+		}
+
+		.dir-btn.active {
+			background: var(--primary);
+			color: white;
+			border-color: var(--primary);
+		}
+
+		.actions {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 10px;
+			margin-top: 16px;
+		}
+
+		.generate-btn {
+			background: var(--primary);
+			color: white;
+		}
+
+		.copy-btn {
+			background: var(--green);
+			color: white;
+		}
+
+		.reset-btn {
+			background: #f3f4f6;
+			color: #374151;
+			border: 1px solid #e5e7eb;
+		}
+
+		textarea {
+			width: 100%;
+			min-height: 620px;
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 14px;
+			font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+			font-size: 14px;
+			line-height: 1.55;
+			resize: vertical;
+			white-space: pre;
+		}
+
+		.history-textarea {
+			min-height: 150px;
+			margin-bottom: 16px;
+			font-family: inherit;
+			white-space: pre-wrap;
+		}
+
+		.calendar-stack {
+			margin-bottom: 14px;
+		}
+
+		.date-picker-box {
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 12px;
+			background: #fbfdff;
+		}
+
+		.date-select-row {
+			display: grid;
+			grid-template-columns: 1.2fr 1fr 1fr;
+			gap: 8px;
+		}
+
+		.date-select-wrap {
+			display: flex;
+			flex-direction: column;
+			gap: 5px;
+		}
+
+		.date-label {
+			color: var(--muted);
+			font-size: 11px;
+			font-weight: 800;
+		}
+
+		.date-select {
+			width: 100%;
+			border: 1px solid #cbd5e1;
+			border-radius: 12px;
+			padding: 10px 8px;
+			background: white;
+			color: var(--text);
+			font-size: 14px;
+			font-weight: 800;
+			font-family: inherit;
+		}
+
+		.section-heading-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			margin-top: 20px;
+			margin-bottom: 14px;
+		}
+
+		.section-heading-row h2 {
+			margin: 0;
+		}
+
+		.manual-btn {
+			padding: 8px 10px;
+			border: 1px solid #cbd5e1;
+			border-radius: 10px;
+			background: #ffffff;
+			color: var(--text);
+			font-size: 12px;
+			font-weight: 800;
+		}
+
+		.manual-btn.active {
+			background: var(--primary);
+			color: white;
+			border-color: var(--primary);
+		}
+
+		.accident-manual-wrap {
+			display: none;
+		}
+
+		.accident-manual-wrap.active {
+			display: block;
+		}
+
+		.accident-auto-wrap.hidden {
+			display: none;
+		}
+
+		.manual-accident-textarea {
+			min-height: 120px;
+			font-family: inherit;
+			white-space: pre-wrap;
+		}
+
+		.treatment-content-textarea {
+			min-height: 82px;
+			margin-bottom: 14px;
+			font-family: inherit;
+			white-space: pre-wrap;
+		}
+
+		.section-subtitle {
+			margin: 14px 0 8px;
+			font-size: 13px;
+			font-weight: 800;
+			color: var(--muted);
+		}
+
+		.car-cabin {
+			position: relative;
+			border: 2px solid #cbd5e1;
+			border-radius: 34px 34px 18px 18px;
+			padding: 28px 14px 16px;
+			margin-bottom: 14px;
+			background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+		}
+
+		.car-cabin::before {
+			content: "앞";
+			position: absolute;
+			top: 7px;
+			left: 50%;
+			transform: translateX(-50%);
+			color: var(--muted);
+			font-size: 11px;
+			font-weight: 800;
+		}
+
+		.seat-row {
+			display: grid;
+			gap: 8px;
+			margin-bottom: 8px;
+		}
+
+		.seat-row.front {
+			grid-template-columns: repeat(3, 1fr);
+		}
+
+		.seat-row.rear {
+			grid-template-columns: repeat(3, 1fr);
+			margin-bottom: 0;
+		}
+
+		.seat-empty {
+			min-height: 54px;
+		}
+
+		.seat-btn {
+			min-height: 54px;
+			padding: 8px 6px;
+			border: 1px solid #cbd5e1;
+			border-radius: 12px;
+			background: #ffffff;
+			color: var(--text);
+			font-size: 13px;
+			font-weight: 800;
+		}
+
+		.seat-btn:hover {
+			background: #e5e7eb;
+		}
+
+		.seat-btn.active {
+			background: var(--primary);
+			color: white;
+			border-color: var(--primary);
+		}
+
+		.drive-status-row {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 8px;
+			margin-bottom: 14px;
+		}
+
+		.collision-map {
+			position: relative;
+			display: grid;
+			grid-template-columns: 1fr 1fr 1fr;
+			gap: 8px;
+			align-items: center;
+			margin-bottom: 14px;
+			padding: 8px;
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			background: #fbfdff;
+		}
+
+		.collision-car {
+			position: relative;
+			min-height: 96px;
+			border: 2px solid #cbd5e1;
+			border-radius: 30px 30px 18px 18px;
+			background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%);
+		}
+
+		.collision-car::before {
+			content: "앞";
+			position: absolute;
+			top: 6px;
+			left: 50%;
+			transform: translateX(-50%);
+			color: var(--muted);
+			font-size: 11px;
+			font-weight: 800;
+		}
+
+		.collision-car::after {
+			content: "";
+			position: absolute;
+			left: 50%;
+			top: 32px;
+			width: 38px;
+			height: 36px;
+			transform: translateX(-50%);
+			border: 1px solid #cbd5e1;
+			border-radius: 10px;
+			background: #f8fafc;
+		}
+
+		.collision-btn {
+			min-height: 40px;
+			padding: 7px 5px;
+			border: 1px solid #cbd5e1;
+			border-radius: 10px;
+			background: #ffffff;
+			color: var(--text);
+			font-size: 12px;
+			font-weight: 800;
+			line-height: 1.2;
+		}
+
+		.collision-btn:hover {
+			background: #e5e7eb;
+		}
+
+		.collision-btn.active {
+			background: var(--primary);
+			color: white;
+			border-color: var(--primary);
+		}
+
+		.result-stack {
+			display: flex;
+			flex-direction: column;
+			gap: 18px;
+		}
+
+		.result-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+
+		.result-header h2 {
+			margin: 0;
+		}
+
+		.result-header .copy-btn {
+			padding: 9px 12px;
+			font-size: 13px;
+			white-space: nowrap;
+		}
+
+		.output-card textarea {
+			min-height: 300px;
+		}
+
+		.output-card.chuna-card textarea {
+			min-height: 240px;
+		}
+
+		.notice {
+			margin-top: 12px;
+			padding: 12px;
+			border-radius: 12px;
+			background: #fffbeb;
+			color: #92400e;
+			font-size: 13px;
+		}
+
+		.small {
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		.toast {
+			position: fixed;
+			left: 50%;
+			bottom: 24px;
+			transform: translateX(-50%);
+			background: #111827;
+			color: white;
+			padding: 10px 14px;
+			border-radius: 999px;
+			font-size: 14px;
+			opacity: 0;
+			pointer-events: none;
+			transition: 0.2s;
+		}
+
+		.toast.show {
+			opacity: 1;
+		}
+
+		@media (max-width: 900px) {
+			.grid {
+				grid-template-columns: 1fr;
+			}
+
+			textarea {
+				min-height: 520px;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="app">
+		<header>
+			<h1>자동차보험 환자 차트 자동 생성기</h1>
+			<p class="subtitle">선택한 내용에 맞춰 O/S, P/I, C/C, P/H 와 추나 차트까지 자동으로 생성합니다.</p>
+		</header>
+
+		<div class="grid">
+			<section class="card">
+				<h2>1. 사고 발생일</h2>
+				<div id="calendarStack" class="calendar-stack"></div>
+
+				<div class="section-heading-row">
+					<h2>2. 사고 경위</h2>
+					<button id="manualAccidentToggle" class="manual-btn" onclick="toggleManualAccidentInput()">직접 입력</button>
+				</div>
+				<div id="accidentAutoControls" class="accident-auto-wrap">
+					<div class="section-subtitle">탑승 위치</div>
+					<div id="seatSelector" class="car-cabin"></div>
+					<div class="section-subtitle">주행 상태</div>
+					<div id="driveStatusSelector" class="drive-status-row"></div>
+					<div class="section-subtitle">추돌 방향</div>
+					<div id="collisionDirectionSelector" class="collision-map"></div>
+					<div class="section-subtitle">치료 내용</div>
+					<textarea id="treatmentContentInput" class="treatment-content-textarea" placeholder="치료 내용을 입력하세요."></textarea>
+				</div>
+				<div id="accidentManualWrap" class="accident-manual-wrap">
+					<textarea id="manualAccidentInput" class="manual-accident-textarea" placeholder="P/I) 이후에 들어갈 사고 경위를 직접 입력하세요."></textarea>
+				</div>
+			</section>
+
+			<section class="card">
+				<h2>3. 부위 선택</h2>
+				<div class="parts" id="parts"></div>
+
+				<h2 style="margin-top: 20px;">4. 세부 설정</h2>
+				<div id="selectedList" class="selected-list"></div>
+				<p id="emptyText" class="small">아직 선택된 부위가 없습니다.</p>
+
+				<h2 style="margin-top: 20px;">5. 과거력</h2>
+				<div id="pastHistoryList" class="past-history-grid"></div>
+
+				<div class="actions">
+					<button class="generate-btn" onclick="generateChart()">차트 생성</button>
+					<button class="reset-btn" onclick="resetAll()">초기화</button>
+				</div>
+			</section>
+
+			<section class="result-stack">
+				<div class="card output-card">
+					<div class="result-header">
+						<h2>차트 결과값</h2>
+						<button class="copy-btn" onclick="copyBasicResult()">차트 복사</button>
+					</div>
+					<textarea id="basicResult" placeholder="차트 생성 버튼을 누르면 차트 결과값이 여기에 표시됩니다."></textarea>
+				</div>
+
+				<div class="card output-card chuna-card">
+					<div class="result-header">
+						<h2>추나 차트 결과값</h2>
+						<button class="copy-btn" onclick="copyChunaResult()">추나 차트 복사</button>
+					</div>
+					<textarea id="chunaResult" placeholder="차트 생성 버튼을 누르면 추나 차트 결과값이 여기에 표시됩니다."></textarea>
+				</div>
+			</section>
+		</div>
+	</div>
+
+	<div id="toast" class="toast">복사되었습니다.</div>
+
+	<script>
+		const PARTS = [
+			{ id: "neck", label: "목&어깨", title: "Neck & Shoulder Pain", directions: ["Rt", "Lt"] },
+			{ id: "lowback", label: "허리", title: "LBP", directions: ["Both"] },
+			{ id: "knee", label: "무릎", title: "Knee Pain", directions: ["Rt", "Lt", "Both"] },
+			{ id: "ankle", label: "발목", title: "Ankle Pain", directions: ["Rt", "Lt", "Both"] },
+			{ id: "elbow", label: "팔꿈치", title: "Elbow Pain", directions: ["Rt", "Lt", "Both"] },
+			{ id: "wrist", label: "손목", title: "Wrist Pain", directions: ["Rt", "Lt", "Both"] },
+		];
+
+		const PAST_HISTORY_ITEMS = [
+			{ key: "HTN", label: "HTN" },
+			{ key: "DM", label: "DM" },
+			{ key: "HL", label: "HL" },
+			{ key: "Tbc", label: "Tbc" },
+			{ key: "CD", label: "CD" },
+			{ key: "Hepa", label: "Hepa" },
+			{ key: "TH", label: "TH" },
+		];
+
+		const SEAT_OPTIONS = [
+			{ key: "driver", label: "운전석", shortLabel: "운전" },
+			{ key: "frontPassenger", label: "조수석", shortLabel: "조수" },
+			{ key: "rearDriver", label: "운전석 뒷좌석", shortLabel: "좌측" },
+			{ key: "rearCenter", label: "뒷좌석 중앙", shortLabel: "중앙" },
+			{ key: "rearPassenger", label: "조수석 뒷좌석", shortLabel: "우측" },
+		];
+
+		const DRIVE_STATUS_OPTIONS = [
+			{ key: "driving", label: "주행중" },
+			{ key: "stopped", label: "정차중" },
+			{ key: "signalWaiting", label: "신호 대기중" },
+			{ key: "leftTurn", label: "좌회전중" },
+			{ key: "rightTurn", label: "우회전중" },
+			{ key: "uTurn", label: "유턴중" },
+		];
+
+		const COLLISION_DIRECTION_OPTIONS = [
+			{ key: "frontLeft", label: "좌측 전측방", shortLabel: "좌전" },
+			{ key: "front", label: "전방", shortLabel: "전방" },
+			{ key: "frontRight", label: "우측 전측방", shortLabel: "우전" },
+			{ key: "left", label: "좌측방", shortLabel: "좌측" },
+			{ key: "right", label: "우측방", shortLabel: "우측" },
+			{ key: "rearLeft", label: "좌측 후측방", shortLabel: "좌후" },
+			{ key: "rear", label: "후방", shortLabel: "후방" },
+			{ key: "rearRight", label: "우측 후측방", shortLabel: "우후" },
+		];
+
+		let selected = [];
+		let pastHistory = getDefaultPastHistory();
+		let selectedAccidentDate = null;
+		let selectedSeat = null;
+		let selectedDriveStatus = null;
+		let selectedCollisionDirection = null;
+		let isManualAccidentInput = false;
+
+		function getDefaultPastHistory() {
+			return PAST_HISTORY_ITEMS.reduce((acc, item) => {
+				acc[item.key] = false;
+				return acc;
+			}, {});
+		}
+
+		function pick(list) {
+			return list[Math.floor(Math.random() * list.length)];
+		}
+
+		function randint(min, max) {
+			return Math.floor(Math.random() * (max - min + 1)) + min;
+		}
+
+		function directionKo(direction) {
+			if (direction === "Rt") return "우측";
+			if (direction === "Lt") return "좌측";
+			return "양측";
+		}
+
+		function directionLabel(direction) {
+			if (direction === "Rt") return "우측";
+			if (direction === "Lt") return "좌측";
+			return "양측";
+		}
+
+		function titlePrefix(direction) {
+			if (direction === "Rt") return "Rt.";
+			if (direction === "Lt") return "Lt.";
+			return "Both";
+		}
+
+		function formatDateForChart(date) {
+			const year = date.getFullYear();
+			const month = String(date.getMonth() + 1).padStart(2, "0");
+			const day = String(date.getDate()).padStart(2, "0");
+			return `${year}.${month}.${day}.`;
+		}
+
+		function formatDateKey(date) {
+			const year = date.getFullYear();
+			const month = String(date.getMonth() + 1).padStart(2, "0");
+			const day = String(date.getDate()).padStart(2, "0");
+			return `${year}-${month}-${day}`;
+		}
+
+		function createAccidentStatement() {
+			const osLine = selectedAccidentDate
+				? `O/S) ${selectedAccidentDate.replaceAll("-", ".")}.`
+				: "O/S) ";
+
+			if (isManualAccidentInput) {
+				const manualText = document.getElementById("manualAccidentInput").value.trim();
+				const manualLine = manualText
+					? (manualText.startsWith("P/I)") ? manualText : `P/I) ${manualText}`)
+					: "";
+				return manualLine ? `${osLine}\n${manualLine}` : `${osLine}\nP/I)`;
+			}
+
+			const seat = SEAT_OPTIONS.find(option => option.key === selectedSeat);
+			const driveStatus = DRIVE_STATUS_OPTIONS.find(option => option.key === selectedDriveStatus);
+			const collisionDirection = COLLISION_DIRECTION_OPTIONS.find(option => option.key === selectedCollisionDirection);
+			const accidentDetails = [
+				seat ? `${seat.label} 탑승 상태로 ` : "",
+				driveStatus ? `${driveStatus.label}이던 Pt. ` : "",
+				collisionDirection ? `${collisionDirection.label}추돌 ` : "",
+			].join("");
+			const treatmentContent = document.getElementById("treatmentContentInput").value.trim();
+			const treatmentLine = treatmentContent ? `\n     ${treatmentContent}` : "";
+
+			if (!accidentDetails) {
+				return `${osLine}\nP/I)${treatmentLine}`;
+			}
+
+			return `${osLine}\nP/I) ${accidentDetails}in-car TA. 이후 증상 발생하심. (단, 환자진술상)${treatmentLine}`;
+		}
+
+		function updateAccidentStatement() {
+			// 사고 경위 선택값은 좌측에 별도 출력하지 않고, 차팅 생성 시 우측 결과 영역에 반영합니다.
+		}
+
+		function toggleManualAccidentInput() {
+			isManualAccidentInput = !isManualAccidentInput;
+			renderAccidentMode();
+		}
+
+		function renderAccidentMode() {
+			const autoControls = document.getElementById("accidentAutoControls");
+			const manualWrap = document.getElementById("accidentManualWrap");
+			const toggleBtn = document.getElementById("manualAccidentToggle");
+
+			autoControls.className = "accident-auto-wrap" + (isManualAccidentInput ? " hidden" : "");
+			manualWrap.className = "accident-manual-wrap" + (isManualAccidentInput ? " active" : "");
+			toggleBtn.className = "manual-btn" + (isManualAccidentInput ? " active" : "");
+		}
+
+		function setAccidentDate(date) {
+			selectedAccidentDate = formatDateKey(date);
+			updateAccidentStatement();
+			renderCalendar();
+		}
+
+		function setSeat(key) {
+			selectedSeat = selectedSeat === key ? null : key;
+			updateAccidentStatement();
+			renderSeatSelector();
+		}
+
+		function setDriveStatus(key) {
+			selectedDriveStatus = selectedDriveStatus === key ? null : key;
+			updateAccidentStatement();
+			renderDriveStatusSelector();
+		}
+
+		function setCollisionDirection(key) {
+			selectedCollisionDirection = selectedCollisionDirection === key ? null : key;
+			updateAccidentStatement();
+			renderCollisionDirectionSelector();
+		}
+
+		function renderCollisionDirectionSelector() {
+			const wrap = document.getElementById("collisionDirectionSelector");
+			wrap.innerHTML = "";
+
+			const layout = [
+				COLLISION_DIRECTION_OPTIONS[0],
+				COLLISION_DIRECTION_OPTIONS[1],
+				COLLISION_DIRECTION_OPTIONS[2],
+				COLLISION_DIRECTION_OPTIONS[3],
+				{ key: "car", type: "car" },
+				COLLISION_DIRECTION_OPTIONS[4],
+				COLLISION_DIRECTION_OPTIONS[5],
+				COLLISION_DIRECTION_OPTIONS[6],
+				COLLISION_DIRECTION_OPTIONS[7],
+			];
+
+			layout.forEach(item => {
+				if (item.type === "car") {
+					const car = document.createElement("div");
+					car.className = "collision-car";
+					wrap.appendChild(car);
+					return;
+				}
+
+				const btn = document.createElement("button");
+				btn.className = "collision-btn" + (selectedCollisionDirection === item.key ? " active" : "");
+				btn.textContent = item.shortLabel;
+				btn.title = item.label;
+				btn.onclick = () => setCollisionDirection(item.key);
+				wrap.appendChild(btn);
+			});
+		}
+
+		function renderDriveStatusSelector() {
+			const wrap = document.getElementById("driveStatusSelector");
+			wrap.innerHTML = "";
+
+			DRIVE_STATUS_OPTIONS.forEach(option => {
+				const btn = document.createElement("button");
+				btn.className = "collision-btn" + (selectedDriveStatus === option.key ? " active" : "");
+				btn.textContent = option.label;
+				btn.onclick = () => setDriveStatus(option.key);
+				wrap.appendChild(btn);
+			});
+		}
+
+		function renderSeatSelector() {
+			const wrap = document.getElementById("seatSelector");
+			wrap.innerHTML = "";
+
+			const frontRow = document.createElement("div");
+			frontRow.className = "seat-row front";
+
+			SEAT_OPTIONS.slice(0, 2).forEach((option, index) => {
+				if (index === 1) {
+					const empty = document.createElement("div");
+					empty.className = "seat-empty";
+					frontRow.appendChild(empty);
+				}
+
+				const btn = document.createElement("button");
+				btn.className = "seat-btn" + (selectedSeat === option.key ? " active" : "");
+				btn.textContent = option.shortLabel;
+				btn.title = option.label;
+				btn.onclick = () => setSeat(option.key);
+				frontRow.appendChild(btn);
+			});
+
+			const rearRow = document.createElement("div");
+			rearRow.className = "seat-row rear";
+
+			SEAT_OPTIONS.slice(2).forEach(option => {
+				const btn = document.createElement("button");
+				btn.className = "seat-btn" + (selectedSeat === option.key ? " active" : "");
+				btn.textContent = option.shortLabel;
+				btn.title = option.label;
+				btn.onclick = () => setSeat(option.key);
+				rearRow.appendChild(btn);
+			});
+
+			wrap.appendChild(frontRow);
+			wrap.appendChild(rearRow);
+		}
+
+		function selectedAccidentDateObject() {
+			const dateKey = selectedAccidentDate || formatDateKey(new Date());
+			const [year, month, day] = dateKey.split("-").map(Number);
+			return new Date(year, month - 1, day);
+		}
+
+		function clampAccidentDate(date) {
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+
+			const nextDate = new Date(date);
+			nextDate.setHours(0, 0, 0, 0);
+
+			if (nextDate > today) {
+				return today;
+			}
+
+			return nextDate;
+		}
+
+		function setAccidentDatePart(part, value) {
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+
+			const current = selectedAccidentDateObject();
+			let year = current.getFullYear();
+			let month = current.getMonth() + 1;
+			let day = current.getDate();
+
+			if (part === "year") year = Number(value);
+			if (part === "month") month = Number(value);
+			if (part === "day") day = Number(value);
+
+			const lastDay = new Date(year, month, 0).getDate();
+			day = Math.min(day, lastDay);
+
+			const nextDate = clampAccidentDate(new Date(year, month - 1, day));
+			selectedAccidentDate = formatDateKey(nextDate);
+			updateAccidentStatement();
+			renderCalendar();
+		}
+
+		function createDateSelect(label, value, options, part) {
+			const wrap = document.createElement("div");
+			wrap.className = "date-select-wrap";
+
+			const labelEl = document.createElement("div");
+			labelEl.className = "date-label";
+			labelEl.textContent = label;
+
+			const select = document.createElement("select");
+			select.className = "date-select";
+			select.value = String(value);
+			select.onchange = () => setAccidentDatePart(part, select.value);
+
+			options.forEach(option => {
+				const optionEl = document.createElement("option");
+				optionEl.value = String(option.value);
+				optionEl.textContent = option.label;
+				if (option.value === value) {
+					optionEl.selected = true;
+				}
+				select.appendChild(optionEl);
+			});
+
+			wrap.appendChild(labelEl);
+			wrap.appendChild(select);
+			return wrap;
+		}
+
+		function renderCalendar() {
+			const wrap = document.getElementById("calendarStack");
+			wrap.innerHTML = "";
+
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+
+			if (!selectedAccidentDate) {
+				selectedAccidentDate = formatDateKey(today);
+				updateAccidentStatement();
+			}
+
+			const selectedDate = selectedAccidentDateObject();
+			const year = selectedDate.getFullYear();
+			const month = selectedDate.getMonth() + 1;
+			const day = selectedDate.getDate();
+
+			const yearOptions = [];
+			for (let y = today.getFullYear(); y >= today.getFullYear() - 3; y--) {
+				yearOptions.push({ value: y, label: `${y}년` });
+			}
+
+			const maxMonth = year === today.getFullYear() ? today.getMonth() + 1 : 12;
+			const monthOptions = [];
+			for (let m = 1; m <= maxMonth; m++) {
+				monthOptions.push({ value: m, label: `${m}월` });
+			}
+
+			const lastDay = new Date(year, month, 0).getDate();
+			const maxDay = year === today.getFullYear() && month === today.getMonth() + 1 ? today.getDate() : lastDay;
+			const dayOptions = [];
+			for (let d = 1; d <= maxDay; d++) {
+				dayOptions.push({ value: d, label: `${d}일` });
+			}
+
+			const box = document.createElement("div");
+			box.className = "date-picker-box";
+
+			const row = document.createElement("div");
+			row.className = "date-select-row";
+			row.appendChild(createDateSelect("년", year, yearOptions, "year"));
+			row.appendChild(createDateSelect("월", month, monthOptions, "month"));
+			row.appendChild(createDateSelect("일", day, dayOptions, "day"));
+
+			box.appendChild(row);
+			wrap.appendChild(box);
+		}
+
+		function nrsByOrder(order) {
+			if (order === 1) return randint(7, 8);
+			if (order === 2) return randint(6, 7);
+			if (order === 3) return randint(5, 6);
+			return randint(4, 5);
+		}
+
+		function normalizeRomForChuna(rom) {
+			return rom
+				.replace("ROM ", "")
+				.replaceAll("Lat.B.", "Lat.B")
+				.replaceAll("Ext. ", "Ext. ");
+		}
+
+		function pickStep(min, max, step = 5) {
+			const values = [];
+			for (let value = min; value <= max; value += step) {
+				values.push(value);
+			}
+			return pick(values);
+		}
+
+		function neckRom(direction, severity = "mild") {
+			const range = severity === "moderate"
+				? {
+					flex: [10, 30],
+					ext: [5, 20],
+					rot: [10, 30],
+					latb: [10, 30],
+				}
+				: {
+					flex: [30, 45],
+					ext: [20, 40],
+					rot: [30, 60],
+					latb: [30, 45],
+				};
+
+			const flex = pickStep(range.flex[0], range.flex[1]);
+			const ext = pickStep(range.ext[0], range.ext[1]);
+			const rotLimited = pickStep(range.rot[0], range.rot[1]);
+			const rotOpposite = pickStep(rotLimited, range.rot[1]);
+			const latbLimited = pickStep(range.latb[0], range.latb[1]);
+			const latbOpposite = pickStep(latbLimited, range.latb[1]);
+
+			const rot = direction === "Rt"
+				? `${rotLimited}+/${rotOpposite}+`
+				: `${rotOpposite}+/${rotLimited}+`;
+			const latb = direction === "Rt"
+				? `${latbLimited}+/${latbOpposite}+`
+				: `${latbOpposite}+/${latbLimited}+`;
+
+			return `ROM Flex. ${flex}+, Ext. ${ext}+, Rot. ${rot}, Lat.B. ${latb}`;
+		}
+
+		function lowbackRom(severity = "mild") {
+			const range = severity === "moderate"
+				? {
+					flex: [20, 30, 45],
+					ext: [5, 10, 15, 20],
+					rot: [10, 15, 20],
+					latb: [10, 15, 20],
+				}
+				: {
+					flex: [45, 60, 75],
+					ext: [20, 30],
+					rot: [20, 25, 30],
+					latb: [20, 25, 30],
+				};
+
+			const flex = pick(range.flex);
+			const ext = pick(range.ext);
+			const rot = pick(range.rot);
+			const latb = pick(range.latb);
+
+			return `ROM Flex. ${flex}+, Ext. ${ext}+, Rot. ${rot}+/${rot}+, Lat.B. ${latb}+/${latb}+`;
+		}
+
+		function neckAByDirection(direction) {
+			if (direction === "Rt") {
+				return "C3-4 ERS L, C6-7 FRS L";
+			}
+			return "C3-4 ERS R, C6-7 FRS R";
+		}
+
+		function shuffle(list) {
+			return [...list].sort(() => Math.random() - 0.5);
+		}
+
+		function neckMuscleLine(symptoms = {}) {
+			const trapezius = pick(["승모근", "상부승모근"]);
+			const orderedMuscles = [
+				{ key: "suboccipital", label: "후두하근" },
+				{ key: "splenius", label: "판상근" },
+				{ key: "semispinalis", label: "반극근" },
+				{ key: "scalene", label: "사각근" },
+				{ key: "scm", label: "흉쇄유돌근" },
+				{ key: "levator", label: "견갑거근" },
+				{ key: "trapezius", label: trapezius },
+				{ key: "rhomboid", label: "능형근" },
+			];
+
+			const requiredKeys = ["scm", "trapezius"];
+			if (symptoms.headache) {
+				requiredKeys.push("suboccipital");
+			}
+
+			const totalCount = randint(4, 6);
+			const optionalKeys = orderedMuscles
+				.map(muscle => muscle.key)
+				.filter(key => !requiredKeys.includes(key));
+			const additionalKeys = shuffle(optionalKeys).slice(0, totalCount - requiredKeys.length);
+			const selectedKeys = [...requiredKeys, ...additionalKeys];
+
+			const muscles = orderedMuscles
+				.filter(muscle => selectedKeys.includes(muscle.key))
+				.map(muscle => muscle.label);
+
+			return `- ${muscles.join(", ")}`;
+		}
+
+		function neckSymptomLine(symptoms = {}) {
+			const headache = symptoms.headache ? "+" : "-";
+			const dizziness = symptoms.dizziness ? "+" : "-";
+			const nausea = symptoms.nausea ? "+" : "-";
+			const vomiting = symptoms.vomiting ? "+" : "-";
+
+			return `- Headache (${headache}), Dizziness (${dizziness}), Nausea (${nausea}), Vomitting (${vomiting})`;
+		}
+
+		function limbSignLine(limbSigns = {}) {
+			const swelling = limbSigns.swelling ? "+" : "-";
+			const heat = limbSigns.heat ? "+" : "-";
+			const tenderness = limbSigns.tenderness ? "+" : "-";
+
+			return `- 부종(${swelling}), 열감(${heat}), 압통(${tenderness})`;
+		}
+
+		function pastHistoryLine() {
+			return PAST_HISTORY_ITEMS
+				.map(item => `${item.label}(${pastHistory[item.key] ? "+" : "-"})`)
+				.join(", ");
+		}
+
+		function createPartBlock(item, order) {
+			const nrs = nrsByOrder(order);
+			const dirKo = directionKo(item.direction);
+			let rom = "";
+			let lines = [];
+
+			if (item.id === "neck") {
+				rom = neckRom(item.direction, item.severity);
+				const neckTitleSuffix = item.direction === "Rt" ? "(Rt.>Lt.)" : "(Lt.>Rt.)";
+				lines = [
+					`#${order}. Neck & Shoulder Pain ${neckTitleSuffix}`,
+					neckMuscleLine(item.symptoms),
+					"- Bed Rest(+), Changing Position(+)",
+					"- Night Pain(-)",
+					`- NRS ${nrs}`,
+					pick([
+						"- 甚) 지속적 양상",
+						"- 甚) 움직임 시 악화 양상",
+						"- 甚) 자세 변화 시 통증 증가",
+					]),
+					`- ${rom}`,
+					neckSymptomLine(item.symptoms),
+				];
+			}
+
+			if (item.id === "lowback") {
+				rom = lowbackRom(item.severity);
+				const lowbackBaseTitle = pick(["LBP", "Back Pain"]);
+				const numbnessTitle = item.lowbackNumbness ? ` & ${titlePrefix(item.lowbackNumbness)} Lowerlimb Numbness` : "";
+				const lowbackTitle = `${lowbackBaseTitle}${numbnessTitle}`;
+				const numbnessKo = item.lowbackNumbness ? directionKo(item.lowbackNumbness) : "";
+				const erectorLabel = pick(["기립근", "요추 기립근", "흉요추부 기립근"]);
+				const lowbackMuscleLine = item.lowbackNumbness
+					? `- 양측 ${erectorLabel}, 요방형근, 중소둔근, 이상근 / ${numbnessKo} 하지 저림 동반`
+					: pick([
+						`- 양측 ${erectorLabel}, 요방형근, 중소둔근`,
+						`- 양측 ${erectorLabel}, 요방형근, 중소둔근, 이상근`,
+					]);
+
+				lines = [
+					`#${order}. ${lowbackTitle}`,
+					lowbackMuscleLine,
+					"- Bed Rest(+), Changing Position(+), Sit(+), Stand(+), Walk(+)",
+					"- Night Pain(-)",
+					`- NRS ${nrs}`,
+					pick([
+						"- 甚) 굴곡시",
+						"- 甚) 굴곡 및 기립시",
+						"- 甚) 체위변경시",
+					]),
+					`- ${rom}`,
+				];
+			}
+
+			if (item.id === "knee") {
+				const title = `${titlePrefix(item.direction)} Knee Pain`;
+				lines = [
+					`#${order}. ${title}`,
+					pick([
+						`- ${dirKo} 슬관절 내측 및 전면`,
+						`- ${dirKo} 슬관절 전면 및 내측부`,
+						`- ${dirKo} 슬개골 주변 및 내측 관절선`,
+					]),
+					"- Bed Rest(+), Changing Position(+), Sit(+), Stand(+), Walk(+)",
+					"- Night Pain(-)",
+					`- NRS ${nrs}`,
+					pick(["- 甚) 걸을 때", "- 甚) 보행시", "- 甚) 기립 및 보행시"]),
+					"- ROM WNL",
+					limbSignLine(item.limbSigns),
+				];
+			}
+
+			if (item.id === "ankle") {
+				const title = `${titlePrefix(item.direction)} Ankle Pain`;
+				lines = [
+					`#${order}. ${title}`,
+					pick([
+						`- ${dirKo} 발목 외과 전면, 하단`,
+						`- ${dirKo} 족관절 외과 전하방`,
+						`- ${dirKo} 발목 외측부 및 외과 주변`,
+					]),
+					"- Bed Rest(+), Changing Position(+), Sit(+), Stand(+), Walk(+)",
+					"- Night Pain(-)",
+					`- NRS ${nrs}`,
+					pick(["- 甚) 걸을 때", "- 甚) 보행시", "- 甚) 체중부하시"]),
+					"- ROM WNL",
+					limbSignLine(item.limbSigns),
+				];
+			}
+
+			if (item.id === "elbow") {
+				const title = `${titlePrefix(item.direction)} Elbow Pain`;
+				lines = [
+					`#${order}. ${title}`,
+					pick([
+						`- ${dirKo} 외상과 주변 및 신전근`,
+						`- ${dirKo} 주관절 외측부 및 신전근 부위`,
+						`- ${dirKo} 외측상과 주변 압통 및 전완 신전근 긴장`,
+					]),
+					"- Bed Rest(+), Changing Position(+)",
+					"- Night Pain(-)",
+					`- NRS ${nrs}`,
+					pick(["- 甚) 힘 쓸 때", "- 甚) 물건 들 때", "- 甚) 전완부 사용시"]),
+					"- ROM WNL",
+					limbSignLine(item.limbSigns),
+				];
+			}
+
+			if (item.id === "wrist") {
+				const title = `${titlePrefix(item.direction)} Wrist Pain`;
+				lines = [
+					`#${order}. ${title}`,
+					pick([
+						`- ${dirKo} 손목 요측 및 손등면 전체적`,
+						`- ${dirKo} 완관절 요측부 및 배측면`,
+						`- ${dirKo} 손목 요측, 손등 부위 전반`,
+					]),
+					"- Bed Rest(+), Changing Position(+)",
+					"- Night Pain(-)",
+					`- NRS ${nrs}`,
+					pick(["- 甚) 힘 들어갈 때", "- 甚) 물건 잡을 때", "- 甚) 손목 사용시"]),
+					"- ROM WNL",
+					limbSignLine(item.limbSigns),
+				];
+			}
+
+			return {
+				text: lines.join("\n"),
+				rom,
+			};
+		}
+
+		function createChuna(context) {
+			const neckItem = context.find(x => x.id === "neck");
+			const lowbackItem = context.find(x => x.id === "lowback");
+
+			const chunaNeckDirection = neckItem ? neckItem.direction : pick(["Rt", "Lt"]);
+			const cRom = neckItem ? neckItem.rom : neckRom(chunaNeckDirection);
+			const lRom = lowbackItem ? lowbackItem.rom : lowbackRom();
+
+			const neckS = chunaNeckDirection === "Rt"
+				? pick([
+					"사고 이후 목이 우측으로 잘 돌아가지 않으며, 뻐근한 느낌 지속되심.",
+					"사고 이후 목을 우측으로 돌릴 때 제한감 및 뻐근함 지속되심.",
+					"사고 이후 우측 경부 회전 시 불편감 있으며, 목 주변 뻐근함 호소하심.",
+					"사고 이후 목의 우측 회전이 불편하고, 경항부 긴장감 지속되심.",
+					"사고 이후 우측으로 고개 돌리기 어려우며, 목 어깨 부위 뻐근함 지속되심.",
+					"사고 이후 우측으로 목 돌릴 때 당김 및 뻐근함 지속되심.",
+				])
+				: pick([
+					"사고 이후 목이 좌측으로 잘 돌아가지 않으며, 뻐근한 느낌 지속되심.",
+					"사고 이후 목을 좌측으로 돌릴 때 제한감 및 뻐근함 지속되심.",
+					"사고 이후 좌측 경부 회전 시 불편감 있으며, 목 주변 뻐근함 호소하심.",
+					"사고 이후 목의 좌측 회전이 불편하고, 경항부 긴장감 지속되심.",
+					"사고 이후 좌측으로 고개 돌리기 어려우며, 목 어깨 부위 뻐근함 지속되심.",
+					"사고 이후 좌측으로 목 돌릴 때 당김 및 뻐근함 지속되심.",
+				]);
+
+			const lowbackS = lowbackItem
+				? pick([
+					"등, 허리 전체적으로 무거우며, 앉았다 일어날 때 통증 호소하심.",
+					"등, 허리 전반적으로 뻐근하고 무거운 느낌 있으며, 체위변경 시 통증 호소하심.",
+					"허리 전체적으로 무거운 느낌 지속되며, 앉았다 일어날 때 및 허리 굽힐 때 통증 호소하심.",
+				])
+				: pick([
+					"등, 허리 전체적으로 무거우며, 움직임 시 불편감 호소하심.",
+					"허리 전반적으로 무거운 느낌 있으며, 체위변경 시 불편감 호소하심.",
+				]);
+
+			const cRomForChuna = normalizeRomForChuna(cRom);
+			const lRomForChuna = normalizeRomForChuna(lRom);
+			const cervicalA = neckAByDirection(chunaNeckDirection);
+
+			return [
+				"<단순추나>",
+				`S) ${neckS}`,
+				`   ${lowbackS}`,
+				`O) C-ROM ${cRomForChuna}`,
+				`   L-ROM ${lRomForChuna}`,
+				`A) ${cervicalA} / 흉요추부 양측성 굴곡-신전 기능부전`,
+				"P) 앙와위 JS 경추 신연 교정기법 / 복와위 요추 굴곡신연기법",
+			].join("\n");
+		}
+
+		function generateChart() {
+			if (selected.length === 0) {
+				alert("부위를 먼저 선택해주세요.");
+				return;
+			}
+
+			const blocks = [];
+			const context = [];
+
+			selected.forEach((item, index) => {
+				const result = createPartBlock(item, index + 1);
+				blocks.push(result.text);
+				context.push({ ...item, rom: result.rom });
+			});
+
+			const patientStatement = createAccidentStatement();
+			const ccChart = blocks.join("\n\n");
+			const basicChart = [
+				patientStatement,
+				`C/C)\n${ccChart}`,
+				`P/H)\n${pastHistoryLine()}`,
+				"S/H & ETC)",
+			].join("\n\n");
+
+			const chunaChart = createChuna(context);
+
+			document.getElementById("basicResult").value = basicChart;
+			document.getElementById("chunaResult").value = chunaChart;
+		}
+
+		function renderParts() {
+			const wrap = document.getElementById("parts");
+			wrap.innerHTML = "";
+
+			PARTS.forEach(part => {
+				const btn = document.createElement("button");
+				btn.className = "part-btn" + (selected.some(x => x.id === part.id) ? " active" : "");
+				btn.textContent = part.label;
+				btn.onclick = () => togglePart(part.id);
+				wrap.appendChild(btn);
+			});
+		}
+
+		function togglePart(partId) {
+			const existing = selected.find(x => x.id === partId);
+			if (existing) {
+				selected = selected.filter(x => x.id !== partId);
+			} else {
+				const part = PARTS.find(x => x.id === partId);
+				selected.push({
+					id: part.id,
+					label: part.label,
+					direction: part.directions[0],
+					symptoms: part.id === "neck" ? {
+						headache: false,
+						dizziness: false,
+						nausea: false,
+						vomiting: false,
+					} : undefined,
+					lowbackNumbness: part.id === "lowback" ? null : undefined,
+					limbSigns: ["knee", "ankle", "elbow", "wrist"].includes(part.id) ? {
+						swelling: false,
+						heat: false,
+						tenderness: false,
+					} : undefined,
+					severity: ["neck", "lowback"].includes(part.id) ? "mild" : undefined,
+				});
+			}
+
+			render();
+		}
+
+		function setDirection(partId, direction) {
+			selected = selected.map(item => item.id === partId ? { ...item, direction } : item);
+			renderSelected();
+		}
+
+		function setSeverity(partId, severity) {
+			selected = selected.map(item => item.id === partId ? { ...item, severity } : item);
+			renderSelected();
+		}
+
+		function toggleNeckSymptom(partId, symptomKey) {
+			selected = selected.map(item => {
+				if (item.id !== partId) return item;
+
+				return {
+					...item,
+					symptoms: {
+						...(item.symptoms || {}),
+						[symptomKey]: !(item.symptoms || {})[symptomKey],
+					},
+				};
+			});
+
+			renderSelected();
+		}
+
+		function setLowbackNumbness(partId, numbnessDirection) {
+			selected = selected.map(item => {
+				if (item.id !== partId) return item;
+
+				return {
+					...item,
+					lowbackNumbness: item.lowbackNumbness === numbnessDirection ? null : numbnessDirection,
+				};
+			});
+
+			renderSelected();
+		}
+
+		function toggleLimbSign(partId, signKey) {
+			selected = selected.map(item => {
+				if (item.id !== partId) return item;
+
+				return {
+					...item,
+					limbSigns: {
+						...(item.limbSigns || {}),
+						[signKey]: !(item.limbSigns || {})[signKey],
+					},
+				};
+			});
+
+			renderSelected();
+		}
+
+		function togglePastHistory(key) {
+			pastHistory = {
+				...pastHistory,
+				[key]: !pastHistory[key],
+			};
+
+			renderPastHistory();
+		}
+
+		function renderPastHistory() {
+			const wrap = document.getElementById("pastHistoryList");
+			wrap.innerHTML = "";
+
+			PAST_HISTORY_ITEMS.forEach(item => {
+				const isActive = !!pastHistory[item.key];
+				const btn = document.createElement("button");
+				btn.className = "dir-btn" + (isActive ? " active" : "");
+				btn.textContent = item.label;
+				btn.onclick = () => togglePastHistory(item.key);
+				wrap.appendChild(btn);
+			});
+		}
+
+		function renderSelected() {
+			const list = document.getElementById("selectedList");
+			const emptyText = document.getElementById("emptyText");
+			list.innerHTML = "";
+
+			emptyText.style.display = selected.length === 0 ? "block" : "none";
+
+			selected.forEach((item, index) => {
+				const part = PARTS.find(x => x.id === item.id);
+				const box = document.createElement("div");
+				box.className = "selected-item";
+
+				const top = document.createElement("div");
+				top.className = "selected-top";
+
+				const title = document.createElement("div");
+				title.className = "selected-title";
+				title.innerHTML = `<span class="order-badge">#${index + 1}</span>${item.label}`;
+
+				const remove = document.createElement("button");
+				remove.className = "remove-btn";
+				remove.textContent = "삭제";
+				remove.onclick = () => togglePart(item.id);
+
+				top.appendChild(title);
+				top.appendChild(remove);
+
+				const dirs = document.createElement("div");
+				dirs.className = "direction-row";
+
+				part.directions.forEach(dir => {
+					const dirBtn = document.createElement("button");
+					dirBtn.className = "dir-btn" + (item.direction === dir ? " active" : "");
+					dirBtn.textContent = directionLabel(dir);
+					dirBtn.onclick = () => setDirection(item.id, dir);
+					dirs.appendChild(dirBtn);
+				});
+
+				if (["neck", "lowback"].includes(item.id)) {
+					const severityOptions = [
+						{ key: "mild", label: "경상" },
+						{ key: "moderate", label: "중경상" },
+					];
+
+					severityOptions.forEach(option => {
+						const severityBtn = document.createElement("button");
+						severityBtn.className = "dir-btn" + (option.key === "mild" ? " severity-start" : "") + (option.key === "mild" && item.id === "lowback" ? " severity-start-lowback" : "") + (item.severity === option.key ? " active" : "");
+						severityBtn.textContent = option.label;
+						severityBtn.onclick = () => setSeverity(item.id, option.key);
+						dirs.appendChild(severityBtn);
+					});
+				}
+
+				box.appendChild(top);
+				box.appendChild(dirs);
+
+				if (item.id === "neck") {
+					const symptomTitle = document.createElement("div");
+					symptomTitle.className = "symptom-title";
+					symptomTitle.textContent = "동반 증상";
+
+					const symptomRow = document.createElement("div");
+					symptomRow.className = "symptom-row";
+
+					const symptomOptions = [
+						{ key: "headache", label: "두통" },
+						{ key: "dizziness", label: "현훈" },
+						{ key: "nausea", label: "오심" },
+						{ key: "vomiting", label: "구토" },
+					];
+
+					symptomOptions.forEach(symptom => {
+						const isActive = !!(item.symptoms || {})[symptom.key];
+						const symptomBtn = document.createElement("button");
+						symptomBtn.className = "dir-btn" + (isActive ? " active" : "");
+						symptomBtn.textContent = symptom.label;
+						symptomBtn.onclick = () => toggleNeckSymptom(item.id, symptom.key);
+						symptomRow.appendChild(symptomBtn);
+					});
+
+					box.appendChild(symptomTitle);
+					box.appendChild(symptomRow);
+				}
+
+				if (item.id === "lowback") {
+					const numbnessTitle = document.createElement("div");
+					numbnessTitle.className = "symptom-title";
+					numbnessTitle.textContent = "하지 저림";
+
+					const numbnessRow = document.createElement("div");
+					numbnessRow.className = "symptom-row";
+
+					const numbnessOptions = [
+						{ key: "Rt", label: "우측 하지저림" },
+						{ key: "Lt", label: "좌측 하지저림" },
+						{ key: "Both", label: "양측 하지저림" },
+					];
+
+					numbnessOptions.forEach(option => {
+						const isActive = item.lowbackNumbness === option.key;
+						const numbnessBtn = document.createElement("button");
+						numbnessBtn.className = "dir-btn" + (isActive ? " active" : "");
+						numbnessBtn.textContent = option.label;
+						numbnessBtn.onclick = () => setLowbackNumbness(item.id, option.key);
+						numbnessRow.appendChild(numbnessBtn);
+					});
+
+					box.appendChild(numbnessTitle);
+					box.appendChild(numbnessRow);
+				}
+
+				if (["knee", "ankle", "elbow", "wrist"].includes(item.id)) {
+					const limbSignTitle = document.createElement("div");
+					limbSignTitle.className = "symptom-title";
+					limbSignTitle.textContent = "국소 소견";
+
+					const limbSignRow = document.createElement("div");
+					limbSignRow.className = "symptom-row";
+
+					const limbSignOptions = [
+						{ key: "swelling", label: "부종" },
+						{ key: "heat", label: "열감" },
+						{ key: "tenderness", label: "압통" },
+					];
+
+					limbSignOptions.forEach(sign => {
+						const isActive = !!(item.limbSigns || {})[sign.key];
+						const signBtn = document.createElement("button");
+						signBtn.className = "dir-btn" + (isActive ? " active" : "");
+						signBtn.textContent = sign.label;
+						signBtn.onclick = () => toggleLimbSign(item.id, sign.key);
+						limbSignRow.appendChild(signBtn);
+					});
+
+					box.appendChild(limbSignTitle);
+					box.appendChild(limbSignRow);
+				}
+
+				list.appendChild(box);
+			});
+		}
+
+		function render() {
+			renderCalendar();
+			renderSeatSelector();
+			renderDriveStatusSelector();
+			renderCollisionDirectionSelector();
+			renderAccidentMode();
+			renderParts();
+			renderSelected();
+			renderPastHistory();
+		}
+
+		function resetAll() {
+			selected = [];
+			pastHistory = getDefaultPastHistory();
+			selectedAccidentDate = null;
+			selectedSeat = null;
+			selectedDriveStatus = null;
+			selectedCollisionDirection = null;
+			isManualAccidentInput = false;
+			document.getElementById("manualAccidentInput").value = "";
+			document.getElementById("treatmentContentInput").value = "";
+			document.getElementById("basicResult").value = "";
+			document.getElementById("chunaResult").value = "";
+			render();
+		}
+
+		async function copyTextArea(textareaId, emptyMessage) {
+			const result = document.getElementById(textareaId).value;
+			if (!result.trim()) {
+				alert(emptyMessage);
+				return;
+			}
+
+			await navigator.clipboard.writeText(result);
+			showToast("복사되었습니다.");
+		}
+
+		function copyBasicResult() {
+			copyTextArea("basicResult", "복사할 기본 차팅이 없습니다.");
+		}
+
+		function copyChunaResult() {
+			copyTextArea("chunaResult", "복사할 추나차팅이 없습니다.");
+		}
+
+		function showToast(message) {
+			const toast = document.getElementById("toast");
+			toast.textContent = message;
+			toast.classList.add("show");
+			setTimeout(() => toast.classList.remove("show"), 1600);
+		}
+
+		render();
+	</script>
+</body>
+</html></body></html>
