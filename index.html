@@ -69,11 +69,11 @@
 <meta property="og:description" content="선택한 내용에 맞춰 O/S, P/I, C/C, P/H 와 추나 차트까지 자동으로 생성합니다."/>
 <title>자동차보험 환자 차트 자동 생성기</title>
 <meta name="description" content="선택한 내용에 맞춰 O/S, P/I, C/C, P/H 와 추나 차트까지 자동으로 생성합니다."/>
-<meta property="og:image" content="https://junesight.github.io/ta-chart-maker/og-image-00hjtake.png"/>
+<meta property="og:image" content="https://junesight.github.io/ta-chart-maker/og-image-00uuq4ck.png"/>
 <meta property="og:image:width" content="1200"/>
 <meta property="og:image:height" content="630"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:image" content="https://junesight.github.io/ta-chart-maker/og-image-00hjtake.png"/>
+<meta name="twitter:image" content="https://junesight.github.io/ta-chart-maker/og-image-00uuq4ck.png"/>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Crect%20width%3D'32'%20height%3D'32'%20rx%3D'6'%20fill%3D'%236366f1'%2F%3E%3Ctext%20x%3D'16'%20y%3D'22'%20text-anchor%3D'middle'%20font-size%3D'18'%20fill%3D'white'%20font-family%3D'sans-serif'%3E%EC%9E%90%3C%2Ftext%3E%3C%2Fsvg%3E"/>
 <script src="https://cdn.tailwindcss.com"></script>
 </head><body><!doctype html>
@@ -1140,12 +1140,15 @@
 				};
 
 			const pickAtLeast = (list, minimum) => pick(list.filter(value => value >= minimum));
+			const pickBelowMax = list => pick(list.slice(0, -1));
+			const pickGreaterThan = (list, minimum) => pick(list.filter(value => value > minimum));
 			const flex = pick(values.flex);
 			const ext = pick(values.ext);
-			const rotLimited = pick(values.rot);
-			const rotOpposite = pickAtLeast(values.rot, rotLimited);
-			const latbLimited = pick(values.latb);
-			const latbOpposite = pickAtLeast(values.latb, latbLimited);
+			const forceRotLimitation = Math.random() < 0.5;
+			const rotLimited = forceRotLimitation ? pickBelowMax(values.rot) : pick(values.rot);
+			const rotOpposite = forceRotLimitation ? pickGreaterThan(values.rot, rotLimited) : pickAtLeast(values.rot, rotLimited);
+			const latbLimited = forceRotLimitation ? pick(values.latb) : pickBelowMax(values.latb);
+			const latbOpposite = forceRotLimitation ? pickAtLeast(values.latb, latbLimited) : pickGreaterThan(values.latb, latbLimited);
 
 			const rot = direction === "Rt"
 				? `${rotLimited}+/${rotOpposite}+`
@@ -1422,9 +1425,9 @@
 			return [
 				"<자보단순추나>",
 				`S) ${neckS}`,
-				`   ${lowbackS}`,
+				`    ${lowbackS}`,
 				`O) C-ROM ${cRomForChuna}`,
-				`   L-ROM ${lRomForChuna}`,
+				`    L-ROM ${lRomForChuna}`,
 				`A) ${cervicalA} / 흉요추부 양측성 굴곡-신전 기능부전`,
 				"P) 앙와위 JS 경추 신연교정기법 / 복와위 요추 굴곡신연기법",
 			].join("\n");
